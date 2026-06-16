@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contrast Topology</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #111318;
+        color: #e8eaed;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      #app {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      .panel {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        z-index: 2;
+        width: min(320px, calc(100vw - 2rem));
+        padding: 1rem 1.1rem;
+        border: 1px solid #2d3340;
+        border-radius: 12px;
+        background: rgba(20, 22, 28, 0.92);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      }
+
+      .panel h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.25rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .panel p {
+        margin: 0 0 1rem;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        color: #aeb4c0;
+      }
+
+      .control {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.35rem 0.75rem;
+        align-items: center;
+        margin-bottom: 0.85rem;
+      }
+
+      .control:last-child {
+        margin-bottom: 0;
+      }
+
+      .control label {
+        font-size: 0.85rem;
+        color: #c8ced8;
+      }
+
+      .control output,
+      .control .hex-readout {
+        font-size: 0.85rem;
+        font-variant-numeric: tabular-nums;
+        color: #9aa3b2;
+        text-align: right;
+      }
+
+      input[type="color"],
+      input[type="range"] {
+        grid-column: 1 / -1;
+      }
+
+      input[type="color"] {
+        width: 100%;
+        height: 2.4rem;
+        padding: 0.15rem;
+        border: 1px solid #3a4150;
+        border-radius: 8px;
+        background: #1a1d24;
+        cursor: pointer;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: #7aa2ff;
+      }
+
+      .legend {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #2d3340;
+        font-size: 0.8rem;
+        color: #8f98a8;
+        line-height: 1.5;
+      }
+
+      #tooltip {
+        position: fixed;
+        z-index: 3;
+        pointer-events: none;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #3a4150;
+        border-radius: 8px;
+        background: rgba(20, 22, 28, 0.95);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        color: #d8dde6;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+
+      #tooltip strong {
+        color: #ffffff;
+        font-weight: 600;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <aside class="panel">
+        <h1>Contrast topology</h1>
+        <p>
+          Circular base is a color wheel (hue by angle, saturation by radius).
+          Height is the WCAG contrast ratio to your selected color.
+        </p>
+
+        <div class="control">
+          <label for="reference-color">Reference color</label>
+          <span class="hex-readout" id="reference-hex">#808080</span>
+          <input id="reference-color" type="color" value="#808080" />
+        </div>
+
+        <div class="control">
+          <label for="wheel-lightness">Wheel lightness</label>
+          <output id="lightness-value" for="wheel-lightness">50%</output>
+          <input
+            id="wheel-lightness"
+            type="range"
+            min="0"
+            max="100"
+            value="50"
+          />
+        </div>
+
+        <div class="legend">
+          Drag to orbit · scroll to zoom · hover for values<br />
+          Height scale: 1:1 (flat) → 21:1 (peak)
+        </div>
+      </aside>
+
+      <canvas id="scene-canvas" aria-label="3D contrast topology visualization"></canvas>
+      <div id="tooltip" hidden></div>
+    </div>
+
+    <script type="module">
+      import { initContrastTopology } from "./scene.js";
+
+      const canvas = document.getElementById("scene-canvas");
+      const tooltip = document.getElementById("tooltip");
+      const referenceColorInput = document.getElementById("reference-color");
+      const lightnessInput = document.getElementById("wheel-lightness");
+      const lightnessValue = document.getElementById("lightness-value");
+      const referenceHex = document.getElementById("reference-hex");
+
+      initContrastTopology(canvas, tooltip, {
+        referenceColorInput,
+        lightnessInput,
+        lightnessValue,
+        referenceHex,
+      });
+    </script>
+  </body>
+</html>
