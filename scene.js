@@ -14,12 +14,78 @@ const ANGULAR_SEGMENTS = 120;
 const RADIAL_SEGMENTS = 40;
 const DISK_RADIUS = 2;
 const HEIGHT_SCALE = 0.15;
+
+/** @typedef {"fail" | "aa" | "aaa" | "max"} WcagAxisLevel */
+
+/** @type {{ ratio: number, label: string, level: WcagAxisLevel }[]} */
 const HEIGHT_AXIS_LABELS = [
-  { ratio: 1, label: "1:1" },
-  { ratio: 4.5, label: "4.5:1" },
-  { ratio: 7, label: "7:1" },
-  { ratio: 21, label: "21:1" },
+  { ratio: 1, label: "1:1 · Fails WCAG", level: "fail" },
+  { ratio: 3, label: "3:1 · AA large text / UI", level: "aa" },
+  { ratio: 4.5, label: "4.5:1 · AA normal text", level: "aa" },
+  { ratio: 7, label: "7:1 · AAA normal text", level: "aaa" },
+  { ratio: 21, label: "21:1 · Max contrast", level: "max" },
 ];
+
+/**
+ * @param {WcagAxisLevel} level
+ * @returns {string}
+ */
+function axisLabelClass(level) {
+  switch (level) {
+    case "fail":
+      return "axis-label axis-label--wcag-fail";
+    case "aa":
+      return "axis-label axis-label--wcag-aa";
+    case "aaa":
+      return "axis-label axis-label--wcag-aaa";
+    case "max":
+      return "axis-label axis-label--wcag-max";
+    default: {
+      const unhandledLevel = level;
+      throw new Error(`Unhandled WCAG axis level: ${unhandledLevel}`);
+    }
+  }
+}
+
+/**
+ * @param {WcagAxisLevel} level
+ * @returns {number}
+ */
+function axisTickColor(level) {
+  switch (level) {
+    case "fail":
+      return 0xc97b7b;
+    case "aa":
+      return 0x6dd97a;
+    case "aaa":
+      return 0x9fe8b0;
+    case "max":
+      return 0x8a909c;
+    default: {
+      const unhandledLevel = level;
+      throw new Error(`Unhandled WCAG axis level: ${unhandledLevel}`);
+    }
+  }
+}
+
+/**
+ * @param {WcagAxisLevel} level
+ * @returns {number}
+ */
+function axisTickLength(level) {
+  switch (level) {
+    case "fail":
+    case "max":
+      return 0.25;
+    case "aa":
+    case "aaa":
+      return 0.35;
+    default: {
+      const unhandledLevel = level;
+      throw new Error(`Unhandled WCAG axis level: ${unhandledLevel}`);
+    }
+  }
+}
 
 /** @typedef {{ h: number, s: number, l: number, contrast: number, hex: string }} VertexMeta */
 
@@ -139,21 +205,22 @@ export class ContrastTopologyScene {
 
     for (const entry of HEIGHT_AXIS_LABELS) {
       const y = contrastToHeight(entry.ratio, HEIGHT_SCALE);
+      const tickLength = axisTickLength(entry.level);
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, y, 0),
-        new THREE.Vector3(0.25, y, 0),
+        new THREE.Vector3(tickLength, y, 0),
       ]);
       const tick = new THREE.Line(
         tickGeometry,
-        new THREE.LineBasicMaterial({ color: 0x8a909c }),
+        new THREE.LineBasicMaterial({ color: axisTickColor(entry.level) }),
       );
       group.add(tick);
 
       const labelElement = document.createElement("div");
-      labelElement.className = "axis-label";
+      labelElement.className = axisLabelClass(entry.level);
       labelElement.textContent = entry.label;
       const label = new CSS2DObject(labelElement);
-      label.position.set(0.32, y, 0);
+      label.position.set(tickLength + 0.07, y, 0);
       group.add(label);
     }
 
