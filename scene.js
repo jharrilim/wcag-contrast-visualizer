@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
 import {
   contrastRatio,
   contrastToHeight,
@@ -13,6 +14,12 @@ const ANGULAR_SEGMENTS = 120;
 const RADIAL_SEGMENTS = 40;
 const DISK_RADIUS = 2;
 const HEIGHT_SCALE = 0.15;
+const HEIGHT_AXIS_LABELS = [
+  { ratio: 1, label: "1:1" },
+  { ratio: 4.5, label: "4.5:1" },
+  { ratio: 7, label: "7:1" },
+  { ratio: 21, label: "21:1" },
+];
 
 /** @typedef {{ h: number, s: number, l: number, contrast: number, hex: string }} VertexMeta */
 
@@ -30,6 +37,16 @@ export class ContrastTopologyScene {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setClearColor(0x111318, 1);
+
+    this.labelRenderer = new CSS2DRenderer();
+    this.labelRenderer.domElement.className = "scene-label-layer";
+    this.labelRenderer.domElement.style.position = "absolute";
+    this.labelRenderer.domElement.style.inset = "0";
+    this.labelRenderer.domElement.style.pointerEvents = "none";
+    const sceneContainer = canvas.parentElement;
+    if (sceneContainer) {
+      sceneContainer.appendChild(this.labelRenderer.domElement);
+    }
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
@@ -102,14 +119,25 @@ export class ContrastTopologyScene {
     const group = new THREE.Group();
     group.position.set(-3.2, 0, 0);
 
-    const labels = [
-      { ratio: 1, label: "1:1" },
-      { ratio: 4.5, label: "4.5:1 AA" },
-      { ratio: 7, label: "7:1 AAA" },
-      { ratio: 21, label: "21:1" },
-    ];
+    const maxHeight = contrastToHeight(21, HEIGHT_SCALE);
+    const spineGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, maxHeight, 0),
+    ]);
+    const spine = new THREE.Line(
+      spineGeometry,
+      new THREE.LineBasicMaterial({ color: 0x5a6070 }),
+    );
+    group.add(spine);
 
-    for (const entry of labels) {
+    const titleElement = document.createElement("div");
+    titleElement.className = "axis-label axis-label--title";
+    titleElement.textContent = "Contrast";
+    const titleLabel = new CSS2DObject(titleElement);
+    titleLabel.position.set(0, maxHeight + 0.18, 0);
+    group.add(titleLabel);
+
+    for (const entry of HEIGHT_AXIS_LABELS) {
       const y = contrastToHeight(entry.ratio, HEIGHT_SCALE);
       const tickGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, y, 0),
@@ -120,6 +148,13 @@ export class ContrastTopologyScene {
         new THREE.LineBasicMaterial({ color: 0x8a909c }),
       );
       group.add(tick);
+
+      const labelElement = document.createElement("div");
+      labelElement.className = "axis-label";
+      labelElement.textContent = entry.label;
+      const label = new CSS2DObject(labelElement);
+      label.position.set(0.32, y, 0);
+      group.add(label);
     }
 
     return group;
@@ -369,6 +404,7 @@ export class ContrastTopologyScene {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
+    this.labelRenderer.setSize(width, height);
   }
 
   /**
@@ -443,6 +479,7 @@ export class ContrastTopologyScene {
   animate() {
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+    this.labelRenderer.render(this.scene, this.camera);
     this.animationFrame = requestAnimationFrame(this.animate);
   }
 
@@ -451,6 +488,7 @@ export class ContrastTopologyScene {
     window.removeEventListener("resize", this.onResize);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
+    this.labelRenderer.domElement.remove();
     this.renderer.dispose();
   }
 }
