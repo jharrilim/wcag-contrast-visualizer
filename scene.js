@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import {
   contrastRatio,
   contrastToHeight,
+  findContrastPeaks,
   hexToRgb,
   rgbToHex,
   wheelColorAt,
@@ -56,6 +57,11 @@ export class ContrastTopologyScene {
     this.vertexMeta = [];
     this.wheelMesh = this.buildWheelMesh();
     this.scene.add(this.wheelMesh);
+
+    this.peakMarkers = new THREE.Group();
+    this.scene.add(this.peakMarkers);
+    this.peakMarkersEnabled = true;
+    this.updatePeakMarkers();
 
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
@@ -202,6 +208,114 @@ export class ContrastTopologyScene {
     return group;
   }
 
+  createPeakMarker() {
+    const group = new THREE.Group();
+    const markerRadius = 0.09;
+    const lift = 0.12;
+
+    const stemGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, lift, 0),
+    ]);
+    const stem = new THREE.Line(
+      stemGeometry,
+      new THREE.LineBasicMaterial({ color: 0xffffff }),
+    );
+    group.add(stem);
+
+    const sphereGeometry = new THREE.SphereGeometry(markerRadius, 20, 20);
+    const sphereMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      emissive: 0xfff4d6,
+      emissiveIntensity: 0.85,
+      metalness: 0.15,
+      roughness: 0.35,
+    });
+    const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    sphere.position.y = lift;
+    group.add(sphere);
+
+    const ringGeometry = new THREE.RingGeometry(
+      markerRadius * 1.35,
+      markerRadius * 1.7,
+      32,
+    );
+    const ringMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+    ring.position.y = lift + 0.01;
+    ring.rotation.x = -Math.PI / 2;
+    group.add(ring);
+
+    return group;
+  }
+
+  clearPeakMarkers() {
+    while (this.peakMarkers.children.length > 0) {
+      const child = this.peakMarkers.children[0];
+      this.peakMarkers.remove(child);
+      child.traverse((object) => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
+          object.geometry.dispose();
+          if (Array.isArray(object.material)) {
+            object.material.forEach((material) => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * @param {boolean} enabled
+   */
+  setPeakMarkersEnabled(enabled) {
+    this.peakMarkersEnabled = enabled;
+    if (enabled) {
+      this.updatePeakMarkers();
+      return;
+    }
+
+    this.clearPeakMarkers();
+  }
+
+  updatePeakMarkers() {
+    this.clearPeakMarkers();
+
+    if (!this.peakMarkersEnabled) {
+      return;
+    }
+
+    const surface = this.wheelMesh.getObjectByName("wheelSurface");
+    if (!(surface instanceof THREE.Mesh)) {
+      return;
+    }
+
+    const radialCount = RADIAL_SEGMENTS + 1;
+    const angularCount = ANGULAR_SEGMENTS + 1;
+    const peakIndices = findContrastPeaks(
+      this.vertexMeta,
+      radialCount,
+      angularCount,
+    );
+    const positions = surface.geometry.attributes.position;
+
+    for (const vertexIndex of peakIndices) {
+      const marker = this.createPeakMarker();
+      marker.position.set(
+        positions.getX(vertexIndex),
+        positions.getY(vertexIndex),
+        positions.getZ(vertexIndex),
+      );
+      this.peakMarkers.add(marker);
+    }
+  }
+
   /**
    * @param {string} referenceHex
    * @param {number} wheelLightness - 0–1
@@ -243,6 +357,7 @@ export class ContrastTopologyScene {
     positions.needsUpdate = true;
     colors.needsUpdate = true;
     geometry.computeVertexNormals();
+    this.updatePeakMarkers();
   }
 
   onResize() {
@@ -343,12 +458,12 @@ export class ContrastTopologyScene {
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} tooltipEl
- * @param {{ referenceColorInput: HTMLInputElement, lightnessInput: HTMLInputElement, lightnessValue: HTMLElement, referenceHex: HTMLElement }} controls
+ * @param {{ referenceColorInput: HTMLInputElement, lightnessInput: HTMLInputElement, lightnessValue: HTMLElement, referenceHex: HTMLElement, showPeaksInput: HTMLInputElement }} controls
  */
 export function initContrastTopology(canvas, tooltipEl, controls) {
   const scene = new ContrastTopologyScene(canvas, tooltipEl);
 
-  const syncFromControls = () => {
+  const syncMeshFromControls = () => {
     const lightness = Number(controls.lightnessInput.value) / 100;
     controls.lightnessValue.textContent = `${controls.lightnessInput.value}%`;
     controls.referenceHex.textContent =
@@ -356,9 +471,13 @@ export function initContrastTopology(canvas, tooltipEl, controls) {
     scene.updateMesh(controls.referenceColorInput.value, lightness);
   };
 
-  controls.referenceColorInput.addEventListener("input", syncFromControls);
-  controls.lightnessInput.addEventListener("input", syncFromControls);
-  syncFromControls();
+  controls.referenceColorInput.addEventListener("input", syncMeshFromControls);
+  controls.lightnessInput.addEventListener("input", syncMeshFromControls);
+  controls.showPeaksInput.addEventListener("change", () => {
+    scene.setPeakMarkersEnabled(controls.showPeaksInput.checked);
+  });
+  scene.setPeakMarkersEnabled(controls.showPeaksInput.checked);
+  syncMeshFromControls();
 
   return scene;
 }

@@ -106,6 +106,15 @@
         accent-color: #7aa2ff;
       }
 
+      .control-toggle input[type="checkbox"] {
+        grid-column: 2;
+        justify-self: end;
+        width: 1rem;
+        height: 1rem;
+        accent-color: #7aa2ff;
+        cursor: pointer;
+      }
+
       .legend {
         margin-top: 0.75rem;
         padding-top: 0.75rem;
@@ -170,6 +179,11 @@
           />
         </div>
 
+        <div class="control control-toggle">
+          <label for="show-peaks">Show contrast peaks</label>
+          <input id="show-peaks" type="checkbox" checked />
+        </div>
+
         <div class="legend">
           Drag to orbit · scroll to zoom · hover for values<br />
           Height scale: 1:1 (flat) → 21:1 (peak)
@@ -189,12 +203,14 @@
       const lightnessInput = document.getElementById("wheel-lightness");
       const lightnessValue = document.getElementById("lightness-value");
       const referenceHex = document.getElementById("reference-hex");
+      const showPeaksInput = document.getElementById("show-peaks");
 
       initContrastTopology(canvas, tooltip, {
         referenceColorInput,
         lightnessInput,
         lightnessValue,
         referenceHex,
+        showPeaksInput,
       });
     </script>
   </body>

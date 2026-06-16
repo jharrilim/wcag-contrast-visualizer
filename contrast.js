@@ -121,3 +121,279 @@ export function wheelColorAt(theta, radius, lightness) {
 export function contrastToHeight(contrast, scaleFactor = 0.15) {
   return (contrast - 1) * scaleFactor;
 }
+
+/**
+ * @param {number} hueA
+ * @param {number} hueB
+ * @returns {number} Shortest distance on the hue circle in degrees
+ */
+function hueDistance(hueA, hueB) {
+  const delta = Math.abs(hueA - hueB);
+  return Math.min(delta, 360 - delta);
+}
+
+/**
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} radialCount
+ * @param {number} angularCount
+ * @param {(hue: number) => boolean} hueInRange
+ * @returns {number}
+ */
+function maxContrastIndexInHueRange(
+  vertexMeta,
+  radialCount,
+  angularCount,
+  hueInRange,
+) {
+  let bestIdx = 0;
+  let bestContrast = -Infinity;
+
+  for (let rIdx = 0; rIdx < radialCount; rIdx += 1) {
+    for (let aIdx = 0; aIdx < angularCount; aIdx += 1) {
+      const idx = rIdx * angularCount + aIdx;
+      const { contrast, h } = vertexMeta[idx];
+      if (hueInRange(h) && contrast > bestContrast) {
+        bestContrast = contrast;
+        bestIdx = idx;
+      }
+    }
+  }
+
+  return bestIdx;
+}
+
+/**
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} radialCount
+ * @param {number} angularCount
+ * @param {number} thirdIndex
+ * @param {number} thirdCount
+ * @returns {number}
+ */
+function maxContrastIndexInHueThird(
+  vertexMeta,
+  radialCount,
+  angularCount,
+  thirdIndex,
+  thirdCount,
+) {
+  const thirdSize = 360 / thirdCount;
+  const startHue = thirdIndex * thirdSize;
+
+  return maxContrastIndexInHueRange(
+    vertexMeta,
+    radialCount,
+    angularCount,
+    (hue) => {
+      if (thirdIndex === thirdCount - 1) {
+        return hue >= startHue;
+      }
+      return hue >= startHue && hue < startHue + thirdSize;
+    },
+  );
+}
+
+/**
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} radialCount
+ * @param {number} angularCount
+ * @param {number} maxPeaks
+ * @returns {number[]}
+ */
+function fallbackContrastPeaks(
+  vertexMeta,
+  radialCount,
+  angularCount,
+  maxPeaks,
+) {
+  /** @type {number[]} */
+  const peaks = [];
+
+  for (let thirdIndex = 0; thirdIndex < maxPeaks; thirdIndex += 1) {
+    const idx = maxContrastIndexInHueThird(
+      vertexMeta,
+      radialCount,
+      angularCount,
+      thirdIndex,
+      maxPeaks,
+    );
+    if (!peaks.includes(idx)) {
+      peaks.push(idx);
+    }
+  }
+
+  return peaks;
+}
+
+/**
+ * @param {{ idx: number, contrast: number, h: number }[]} localMaxima
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} maxPeaks
+ * @param {number} minHueSeparation
+ * @returns {number[]}
+ */
+function selectSeparatedPeaks(
+  localMaxima,
+  vertexMeta,
+  maxPeaks,
+  minHueSeparation,
+) {
+  const sorted = [...localMaxima].sort((a, b) => b.contrast - a.contrast);
+  /** @type {number[]} */
+  const selected = [];
+
+  for (const candidate of sorted) {
+    if (selected.length >= maxPeaks) {
+      break;
+    }
+
+    const separated = selected.every(
+      (peakIdx) =>
+        hueDistance(vertexMeta[peakIdx].h, candidate.h) >= minHueSeparation,
+    );
+    if (separated) {
+      selected.push(candidate.idx);
+    }
+  }
+
+  return selected;
+}
+
+/**
+ * @param {number[]} selected
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} radialCount
+ * @param {number} angularCount
+ * @param {number} targetCount
+ * @param {number} minHueSeparation
+ * @returns {number[]}
+ */
+function supplementPeaksFromFallback(
+  selected,
+  vertexMeta,
+  radialCount,
+  angularCount,
+  targetCount,
+  minHueSeparation,
+) {
+  const fallback = fallbackContrastPeaks(
+    vertexMeta,
+    radialCount,
+    angularCount,
+    targetCount,
+  );
+  const sortedFallback = fallback
+    .map((idx) => ({
+      idx,
+      contrast: vertexMeta[idx].contrast,
+      h: vertexMeta[idx].h,
+    }))
+    .sort((a, b) => b.contrast - a.contrast);
+
+  const merged = [...selected];
+
+  for (const candidate of sortedFallback) {
+    if (merged.length >= targetCount) {
+      break;
+    }
+    if (merged.includes(candidate.idx)) {
+      continue;
+    }
+
+    const separated = merged.every(
+      (peakIdx) =>
+        hueDistance(vertexMeta[peakIdx].h, candidate.h) >= minHueSeparation,
+    );
+    if (separated) {
+      merged.push(candidate.idx);
+    }
+  }
+
+  return merged;
+}
+
+const MAX_CONTRAST_PEAKS = 3;
+const MIN_PEAK_HUE_SEPARATION = 60;
+
+/**
+ * Find up to three dominant local maxima on the contrast surface grid.
+ * Returns however many well-separated peaks are found (1–3). Falls back to
+ * the brightest point in each hue third only when no interior local maxima
+ * are detected.
+ *
+ * @param {{ contrast: number, h: number }[]} vertexMeta
+ * @param {number} radialCount
+ * @param {number} angularCount
+ * @returns {number[]} Vertex indices for up to three peaks
+ */
+export function findContrastPeaks(vertexMeta, radialCount, angularCount) {
+  /** @type {{ idx: number, contrast: number, h: number }[]} */
+  const localMaxima = [];
+
+  for (let rIdx = 1; rIdx < radialCount - 1; rIdx += 1) {
+    for (let aIdx = 0; aIdx < angularCount; aIdx += 1) {
+      const idx = rIdx * angularCount + aIdx;
+      const value = vertexMeta[idx].contrast;
+      let isLocalMax = true;
+
+      for (let dr = -1; dr <= 1 && isLocalMax; dr += 1) {
+        for (let da = -1; da <= 1; da += 1) {
+          if (dr === 0 && da === 0) {
+            continue;
+          }
+
+          const neighborRadius = rIdx + dr;
+          if (neighborRadius < 0 || neighborRadius >= radialCount) {
+            isLocalMax = false;
+            break;
+          }
+
+          const neighborAngle =
+            (aIdx + da + angularCount) % angularCount;
+          const neighborIdx = neighborRadius * angularCount + neighborAngle;
+          if (vertexMeta[neighborIdx].contrast >= value) {
+            isLocalMax = false;
+            break;
+          }
+        }
+      }
+
+      if (isLocalMax) {
+        localMaxima.push({
+          idx,
+          contrast: value,
+          h: vertexMeta[idx].h,
+        });
+      }
+    }
+  }
+
+  if (localMaxima.length === 0) {
+    return fallbackContrastPeaks(
+      vertexMeta,
+      radialCount,
+      angularCount,
+      MAX_CONTRAST_PEAKS,
+    );
+  }
+
+  const selected = selectSeparatedPeaks(
+    localMaxima,
+    vertexMeta,
+    MAX_CONTRAST_PEAKS,
+    MIN_PEAK_HUE_SEPARATION,
+  );
+
+  if (selected.length < 2) {
+    return supplementPeaksFromFallback(
+      selected,
+      vertexMeta,
+      radialCount,
+      angularCount,
+      2,
+      MIN_PEAK_HUE_SEPARATION,
+    );
+  }
+
+  return selected;
+}
