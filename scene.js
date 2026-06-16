@@ -7,6 +7,8 @@ import {
   findContrastPeaks,
   hexToRgb,
   rgbToHex,
+  wcagContrastDescription,
+  wcagContrastLevel,
   wheelColorAt,
 } from "./contrast.js";
 
@@ -529,13 +531,17 @@ export class ContrastTopologyScene {
   showTooltip(x, y, meta) {
     const satPercent = Math.round(meta.s * 100);
     const lightPercent = Math.round(meta.l * 100);
+    const wcagLevel = wcagContrastLevel(meta.contrast);
+    const wcagDescription = wcagContrastDescription(meta.contrast);
+    const contrastText = `${meta.contrast.toFixed(2)}:1`;
+
     this.tooltipEl.hidden = false;
     this.tooltipEl.style.left = `${x + 14}px`;
     this.tooltipEl.style.top = `${y + 14}px`;
     this.tooltipEl.innerHTML = `
       <strong>${meta.hex.toUpperCase()}</strong><br />
       H ${Math.round(meta.h)}° · S ${satPercent}% · L ${lightPercent}%<br />
-      Contrast ${meta.contrast.toFixed(2)}:1
+      Contrast <span class="tooltip-contrast tooltip-contrast--${wcagLevel}" title="${wcagDescription}">${contrastText}</span>
     `;
   }
 

@@ -112,6 +112,50 @@ export function wheelColorAt(theta, radius, lightness) {
   return { h, s, l: lightness, ...rgb };
 }
 
+/** @typedef {"fail" | "aa" | "aaa" | "max"} WcagContrastLevel */
+
+const WCAG_AA_LARGE_TEXT = 3;
+const WCAG_AA_NORMAL_TEXT = 4.5;
+const WCAG_AAA_NORMAL_TEXT = 7;
+const WCAG_MAX_CONTRAST = 21;
+
+/**
+ * @param {number} contrast
+ * @returns {WcagContrastLevel}
+ */
+export function wcagContrastLevel(contrast) {
+  if (contrast >= WCAG_MAX_CONTRAST) {
+    return "max";
+  }
+  if (contrast >= WCAG_AAA_NORMAL_TEXT) {
+    return "aaa";
+  }
+  if (contrast >= WCAG_AA_LARGE_TEXT) {
+    return "aa";
+  }
+  return "fail";
+}
+
+/**
+ * @param {number} contrast
+ * @returns {string}
+ */
+export function wcagContrastDescription(contrast) {
+  if (contrast >= WCAG_MAX_CONTRAST) {
+    return "Maximum contrast";
+  }
+  if (contrast >= WCAG_AAA_NORMAL_TEXT) {
+    return "AAA normal text";
+  }
+  if (contrast >= WCAG_AA_NORMAL_TEXT) {
+    return "AA normal text";
+  }
+  if (contrast >= WCAG_AA_LARGE_TEXT) {
+    return "AA large text / UI";
+  }
+  return "Fails WCAG";
+}
+
 /**
  * Map contrast ratio to scene height.
  * @param {number} contrast - 1–21
