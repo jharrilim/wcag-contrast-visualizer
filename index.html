@@ -64,21 +64,27 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
+        isolation: isolate;
       }
 
       canvas {
         display: block;
         width: 100%;
         height: 100%;
+        position: relative;
+        z-index: 0;
+      }
+
+      .scene-label-layer {
+        z-index: 1;
       }
 
       .panel {
         position: absolute;
         top: 1rem;
         left: 1rem;
-        z-index: 2;
+        z-index: 10;
         width: min(320px, calc(100vw - 2rem));
-        padding: 1rem 1.1rem;
         border: 1px solid #2d3340;
         border-radius: 12px;
         background: rgba(20, 22, 28, 0.92);
@@ -86,11 +92,85 @@
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
       }
 
+      .panel-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.1rem;
+      }
+
+      .panel--collapsed .panel-header {
+        padding: 0.75rem 1rem;
+      }
+
+      .panel-toggle {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        border: 1px solid #3a4150;
+        border-radius: 8px;
+        background: #1a1d24;
+        color: #aeb4c0;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          color 0.15s ease;
+      }
+
+      .panel-toggle:hover {
+        background: #252830;
+        border-color: #4a5160;
+        color: #e8eaed;
+      }
+
+      .panel-toggle:focus-visible {
+        outline: 2px solid #7aa2ff;
+        outline-offset: 2px;
+      }
+
+      .panel-toggle-icon {
+        display: block;
+        width: 0.65rem;
+        height: 0.65rem;
+        border-right: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(45deg);
+        transition: transform 0.2s ease;
+      }
+
+      .panel--collapsed .panel-toggle-icon {
+        transform: rotate(-135deg);
+      }
+
+      .panel-content {
+        padding: 0 1.1rem 1rem;
+        max-height: 28rem;
+        overflow: hidden;
+        transition:
+          max-height 0.25s ease,
+          opacity 0.2s ease,
+          padding 0.25s ease;
+      }
+
+      .panel--collapsed .panel-content {
+        max-height: 0;
+        opacity: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        pointer-events: none;
+      }
+
       .panel h1 {
-        margin: 0 0 0.35rem;
+        margin: 0;
         font-size: 1.25rem;
         font-weight: 650;
         letter-spacing: -0.02em;
+        line-height: 1.2;
       }
 
       .panel p {
@@ -165,7 +245,7 @@
 
       #tooltip {
         position: fixed;
-        z-index: 3;
+        z-index: 20;
         pointer-events: none;
         padding: 0.45rem 0.6rem;
         border: 1px solid #3a4150;
@@ -253,39 +333,54 @@
   </head>
   <body>
     <div id="app">
-      <aside class="panel">
-        <h1>Contrast topology</h1>
-        <p>
-          Circular base is a color wheel (hue by angle, saturation by radius).
-          Height is the WCAG contrast ratio to your selected color.
-        </p>
-
-        <div class="control">
-          <label for="reference-color">Reference color</label>
-          <span class="hex-readout" id="reference-hex">#808080</span>
-          <input id="reference-color" type="color" value="#808080" />
+      <aside class="panel" id="controls-panel">
+        <div class="panel-header">
+          <button
+            type="button"
+            class="panel-toggle"
+            id="panel-toggle"
+            aria-expanded="true"
+            aria-controls="panel-content"
+            aria-label="Collapse controls"
+          >
+            <span class="panel-toggle-icon" aria-hidden="true"></span>
+          </button>
+          <h1>Contrast topology</h1>
         </div>
 
-        <div class="control">
-          <label for="wheel-lightness">Wheel lightness</label>
-          <output id="lightness-value" for="wheel-lightness">50%</output>
-          <input
-            id="wheel-lightness"
-            type="range"
-            min="0"
-            max="100"
-            value="50"
-          />
-        </div>
+        <div class="panel-content" id="panel-content">
+          <p>
+            Circular base is a color wheel (hue by angle, saturation by radius).
+            Height is the WCAG contrast ratio to your selected color.
+          </p>
 
-        <div class="control control-toggle">
-          <label for="show-peaks">Show contrast peaks</label>
-          <input id="show-peaks" type="checkbox" checked />
-        </div>
+          <div class="control">
+            <label for="reference-color">Reference color</label>
+            <span class="hex-readout" id="reference-hex">#808080</span>
+            <input id="reference-color" type="color" value="#808080" />
+          </div>
 
-        <div class="legend">
-          Drag to orbit · scroll to zoom · hover for values<br />
-          Height scale: 1:1 (flat) → 21:1 (peak)
+          <div class="control">
+            <label for="wheel-lightness">Wheel lightness</label>
+            <output id="lightness-value" for="wheel-lightness">50%</output>
+            <input
+              id="wheel-lightness"
+              type="range"
+              min="0"
+              max="100"
+              value="50"
+            />
+          </div>
+
+          <div class="control control-toggle">
+            <label for="show-peaks">Show contrast peaks</label>
+            <input id="show-peaks" type="checkbox" checked />
+          </div>
+
+          <div class="legend">
+            Drag to orbit · scroll to zoom · hover for values<br />
+            Height scale: 1:1 (flat) → 21:1 (peak)
+          </div>
         </div>
       </aside>
 
@@ -303,6 +398,29 @@
       const lightnessValue = document.getElementById("lightness-value");
       const referenceHex = document.getElementById("reference-hex");
       const showPeaksInput = document.getElementById("show-peaks");
+      const controlsPanel = document.getElementById("controls-panel");
+      const panelToggle = document.getElementById("panel-toggle");
+      const panelContent = document.getElementById("panel-content");
+
+      const PANEL_COLLAPSED_KEY = "contrast-topology-panel-collapsed";
+
+      const setPanelCollapsed = (collapsed) => {
+        controlsPanel.classList.toggle("panel--collapsed", collapsed);
+        panelToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        panelToggle.setAttribute(
+          "aria-label",
+          collapsed ? "Expand controls" : "Collapse controls",
+        );
+        panelContent.setAttribute("aria-hidden", collapsed ? "true" : "false");
+        sessionStorage.setItem(PANEL_COLLAPSED_KEY, collapsed ? "1" : "0");
+      };
+
+      const storedCollapsed = sessionStorage.getItem(PANEL_COLLAPSED_KEY) === "1";
+      setPanelCollapsed(storedCollapsed);
+
+      panelToggle.addEventListener("click", () => {
+        setPanelCollapsed(!controlsPanel.classList.contains("panel--collapsed"));
+      });
 
       initContrastTopology(canvas, tooltip, {
         referenceColorInput,

@@ -111,9 +111,11 @@ export class ContrastTopologyScene {
     this.labelRenderer.domElement.style.position = "absolute";
     this.labelRenderer.domElement.style.inset = "0";
     this.labelRenderer.domElement.style.pointerEvents = "none";
+    this.labelRenderer.domElement.style.zIndex = "1";
     const sceneContainer = canvas.parentElement;
     if (sceneContainer) {
-      sceneContainer.appendChild(this.labelRenderer.domElement);
+      const insertBefore = canvas.nextElementSibling;
+      sceneContainer.insertBefore(this.labelRenderer.domElement, insertBefore);
     }
 
     this.scene = new THREE.Scene();
