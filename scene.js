@@ -89,7 +89,7 @@ function axisTickLength(level) {
   }
 }
 
-/** @typedef {{ h: number, s: number, l: number, contrast: number, hex: string }} VertexMeta */
+/** @typedef {{ h: number, s: number, contrast: number, hex: string, model: import("./contrast.js").WheelColorModel, l?: number, v?: number, brightness?: number, r: number, g: number, b: number }} VertexMeta */
 
 export class ContrastTopologyScene {
   /**
@@ -101,6 +101,7 @@ export class ContrastTopologyScene {
     this.tooltipEl = tooltipEl;
     this.referenceRgb = hexToRgb("#808080");
     this.wheelLightness = 0.5;
+    this.wheelColorModel = "hsl";
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -247,7 +248,12 @@ export class ContrastTopologyScene {
       const radius = rIdx / RADIAL_SEGMENTS;
       for (let aIdx = 0; aIdx <= ANGULAR_SEGMENTS; aIdx += 1) {
         const theta = (aIdx / ANGULAR_SEGMENTS) * Math.PI * 2;
-        const color = wheelColorAt(theta, radius, this.wheelLightness);
+        const color = wheelColorAt(
+          theta,
+          radius,
+          this.wheelLightness,
+          this.wheelColorModel,
+        );
         const contrast = contrastRatio(this.referenceRgb, color);
         const x = Math.cos(theta) * radius * DISK_RADIUS;
         const z = Math.sin(theta) * radius * DISK_RADIUS;
@@ -265,6 +271,12 @@ export class ContrastTopologyScene {
           h: color.h,
           s: color.s,
           l: color.l,
+          v: color.v,
+          brightness: color.brightness,
+          model: color.model,
+          r: color.r,
+          g: color.g,
+          b: color.b,
           contrast,
           hex: rgbToHex(color),
         });
@@ -291,11 +303,9 @@ export class ContrastTopologyScene {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    const surfaceMaterial = new THREE.MeshStandardMaterial({
+    const surfaceMaterial = new THREE.MeshBasicMaterial({
       vertexColors: true,
       side: THREE.DoubleSide,
-      metalness: 0,
-      roughness: 0.8,
     });
 
     const wireframeMaterial = new THREE.MeshBasicMaterial({
@@ -309,6 +319,7 @@ export class ContrastTopologyScene {
     const surface = new THREE.Mesh(geometry, surfaceMaterial);
     surface.name = "wheelSurface";
     const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
+    wireframe.name = "wheelWireframe";
     group.add(surface, wireframe);
 
     return group;
@@ -390,6 +401,16 @@ export class ContrastTopologyScene {
     this.clearPeakMarkers();
   }
 
+  /**
+   * @param {boolean} visible
+   */
+  setSurfaceWireframeVisible(visible) {
+    const wireframe = this.wheelMesh.getObjectByName("wheelWireframe");
+    if (wireframe) {
+      wireframe.visible = visible;
+    }
+  }
+
   updatePeakMarkers() {
     this.clearPeakMarkers();
 
@@ -424,11 +445,13 @@ export class ContrastTopologyScene {
 
   /**
    * @param {string} referenceHex
-   * @param {number} wheelLightness - 0–1
+   * @param {number} wheelLightness - 0–1 (HSL lightness or HSV value)
+   * @param {import("./contrast.js").WheelColorModel} [wheelColorModel]
    */
-  updateMesh(referenceHex, wheelLightness) {
+  updateMesh(referenceHex, wheelLightness, wheelColorModel = this.wheelColorModel) {
     this.referenceRgb = hexToRgb(referenceHex);
     this.wheelLightness = wheelLightness;
+    this.wheelColorModel = wheelColorModel;
 
     const surface = this.wheelMesh.getObjectByName("wheelSurface");
     if (!(surface instanceof THREE.Mesh)) {
@@ -446,7 +469,12 @@ export class ContrastTopologyScene {
       const theta = Math.atan2(positions.getZ(i), positions.getX(i));
       const normalizedTheta = theta < 0 ? theta + Math.PI * 2 : theta;
 
-      const color = wheelColorAt(normalizedTheta, radius, this.wheelLightness);
+      const color = wheelColorAt(
+        normalizedTheta,
+        radius,
+        this.wheelLightness,
+        this.wheelColorModel,
+      );
       const contrast = contrastRatio(this.referenceRgb, color);
       const y = contrastToHeight(contrast, HEIGHT_SCALE);
 
@@ -456,6 +484,12 @@ export class ContrastTopologyScene {
       meta.h = color.h;
       meta.s = color.s;
       meta.l = color.l;
+      meta.v = color.v;
+      meta.brightness = color.brightness;
+      meta.model = color.model;
+      meta.r = color.r;
+      meta.g = color.g;
+      meta.b = color.b;
       meta.contrast = contrast;
       meta.hex = rgbToHex(color);
     }
@@ -532,17 +566,30 @@ export class ContrastTopologyScene {
    */
   showTooltip(x, y, meta) {
     const satPercent = Math.round(meta.s * 100);
-    const lightPercent = Math.round(meta.l * 100);
     const wcagLevel = wcagContrastLevel(meta.contrast);
     const wcagDescription = wcagContrastDescription(meta.contrast);
     const contrastText = `${meta.contrast.toFixed(2)}:1`;
+    const colorComponents = (() => {
+      switch (meta.model) {
+        case "hsv":
+          return `H ${Math.round(meta.h)}° · S ${satPercent}% · V ${Math.round((meta.v ?? 0) * 100)}%`;
+        case "rgb": {
+          const redPercent = Math.round(meta.r * 100);
+          const greenPercent = Math.round(meta.g * 100);
+          const bluePercent = Math.round(meta.b * 100);
+          return `R ${redPercent}% · G ${greenPercent}% · B ${bluePercent}%`;
+        }
+        default:
+          return `H ${Math.round(meta.h)}° · S ${satPercent}% · L ${Math.round((meta.l ?? 0) * 100)}%`;
+      }
+    })();
 
     this.tooltipEl.hidden = false;
     this.tooltipEl.style.left = `${x + 14}px`;
     this.tooltipEl.style.top = `${y + 14}px`;
     this.tooltipEl.innerHTML = `
       <strong>${meta.hex.toUpperCase()}</strong><br />
-      H ${Math.round(meta.h)}° · S ${satPercent}% · L ${lightPercent}%<br />
+      ${colorComponents}<br />
       Contrast <span class="tooltip-contrast tooltip-contrast--${wcagLevel}" title="${wcagDescription}">${contrastText}</span>
     `;
   }
@@ -571,25 +618,52 @@ export class ContrastTopologyScene {
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {HTMLElement} tooltipEl
- * @param {{ referenceColorInput: HTMLInputElement, lightnessInput: HTMLInputElement, lightnessValue: HTMLElement, referenceHex: HTMLElement, showPeaksInput: HTMLInputElement }} controls
+ * @param {{ referenceColorInput: HTMLInputElement, lightnessInput: HTMLInputElement, lightnessValue: HTMLElement, referenceHex: HTMLElement, showPeaksInput: HTMLInputElement, showWireframeInput: HTMLInputElement, wheelModelSelect: HTMLSelectElement, wheelLevelLabel: HTMLElement }} controls
  */
 export function initContrastTopology(canvas, tooltipEl, controls) {
   const scene = new ContrastTopologyScene(canvas, tooltipEl);
 
+  const syncWheelLevelLabel = () => {
+    switch (controls.wheelModelSelect.value) {
+      case "hsv":
+        controls.wheelLevelLabel.textContent = "Wheel value";
+        break;
+      case "rgb":
+        controls.wheelLevelLabel.textContent = "Wheel brightness";
+        break;
+      default:
+        controls.wheelLevelLabel.textContent = "Wheel lightness";
+        break;
+    }
+  };
+
   const syncMeshFromControls = () => {
     const lightness = Number(controls.lightnessInput.value) / 100;
+    const wheelColorModel = /** @type {import("./contrast.js").WheelColorModel} */ (
+      controls.wheelModelSelect.value
+    );
     controls.lightnessValue.textContent = `${controls.lightnessInput.value}%`;
     controls.referenceHex.textContent =
       controls.referenceColorInput.value.toUpperCase();
-    scene.updateMesh(controls.referenceColorInput.value, lightness);
+    syncWheelLevelLabel();
+    scene.updateMesh(
+      controls.referenceColorInput.value,
+      lightness,
+      wheelColorModel,
+    );
   };
 
   controls.referenceColorInput.addEventListener("input", syncMeshFromControls);
   controls.lightnessInput.addEventListener("input", syncMeshFromControls);
+  controls.wheelModelSelect.addEventListener("change", syncMeshFromControls);
   controls.showPeaksInput.addEventListener("change", () => {
     scene.setPeakMarkersEnabled(controls.showPeaksInput.checked);
   });
+  controls.showWireframeInput.addEventListener("change", () => {
+    scene.setSurfaceWireframeVisible(controls.showWireframeInput.checked);
+  });
   scene.setPeakMarkersEnabled(controls.showPeaksInput.checked);
+  scene.setSurfaceWireframeVisible(controls.showWireframeInput.checked);
   syncMeshFromControls();
 
   return scene;

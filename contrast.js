@@ -100,16 +100,132 @@ export function hslToRgb(h, s, l) {
 }
 
 /**
+ * @param {number} h - Hue 0–360
+ * @param {number} s - Saturation 0–1
+ * @param {number} v - Value 0–1
+ * @returns {{ r: number, g: number, b: number }}
+ */
+export function hsvToRgb(h, s, v) {
+  const hue = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = v - c;
+
+  let rPrime = 0;
+  let gPrime = 0;
+  let bPrime = 0;
+
+  if (hue < 60) {
+    rPrime = c;
+    gPrime = x;
+  } else if (hue < 120) {
+    rPrime = x;
+    gPrime = c;
+  } else if (hue < 180) {
+    gPrime = c;
+    bPrime = x;
+  } else if (hue < 240) {
+    gPrime = x;
+    bPrime = c;
+  } else if (hue < 300) {
+    rPrime = x;
+    bPrime = c;
+  } else {
+    rPrime = c;
+    bPrime = x;
+  }
+
+  return { r: rPrime + m, g: gPrime + m, b: bPrime + m };
+}
+
+/**
+ * @param {number} r
+ * @param {number} g
+ * @param {number} b
+ * @returns {number} Hue 0–360
+ */
+export function rgbToHue(r, g, b) {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  if (delta === 0) {
+    return 0;
+  }
+
+  let hue = 0;
+  if (max === r) {
+    hue = ((g - b) / delta) % 6;
+  } else if (max === g) {
+    hue = (b - r) / delta + 2;
+  } else {
+    hue = (r - g) / delta + 4;
+  }
+
+  hue *= 60;
+  if (hue < 0) {
+    hue += 360;
+  }
+  return hue;
+}
+
+/**
+ * RGB cosine wheel: channels vary directly with angle, blended toward gray at the center.
+ * @param {number} theta - Angle in radians
+ * @param {number} radius - Normalized radius 0–1
+ * @param {number} brightness - 0–1
+ * @returns {{ r: number, g: number, b: number }}
+ */
+export function rgbWheelToRgb(theta, radius, brightness) {
+  const rimR = brightness * (0.5 + 0.5 * Math.cos(theta));
+  const rimG = brightness * (0.5 + 0.5 * Math.cos(theta - (2 * Math.PI) / 3));
+  const rimB = brightness * (0.5 + 0.5 * Math.cos(theta - (4 * Math.PI) / 3));
+  const gray = brightness;
+
+  return {
+    r: gray + (rimR - gray) * radius,
+    g: gray + (rimG - gray) * radius,
+    b: gray + (rimB - gray) * radius,
+  };
+}
+
+/** @typedef {"hsl" | "hsv" | "rgb"} WheelColorModel */
+
+/**
  * @param {number} theta - Angle in radians
  * @param {number} radius - Normalized radius 0–1 (saturation)
- * @param {number} lightness - Lightness 0–1
- * @returns {{ h: number, s: number, l: number, r: number, g: number, b: number }}
+ * @param {number} level - HSL lightness, HSV value, or RGB brightness (0–1)
+ * @param {WheelColorModel} model
+ * @returns {{ h: number, s: number, model: WheelColorModel, l?: number, v?: number, brightness?: number, r: number, g: number, b: number }}
  */
-export function wheelColorAt(theta, radius, lightness) {
+export function wheelColorAt(theta, radius, level, model = "hsl") {
   const h = (theta / (2 * Math.PI)) * 360;
   const s = radius;
-  const rgb = hslToRgb(h, s, lightness);
-  return { h, s, l: lightness, ...rgb };
+
+  switch (model) {
+    case "hsv": {
+      const rgb = hsvToRgb(h, s, level);
+      return { h, s, v: level, model, ...rgb };
+    }
+    case "hsl": {
+      const rgb = hslToRgb(h, s, level);
+      return { h, s, l: level, model, ...rgb };
+    }
+    case "rgb": {
+      const rgb = rgbWheelToRgb(theta, radius, level);
+      return {
+        h: rgbToHue(rgb.r, rgb.g, rgb.b),
+        s: radius,
+        brightness: level,
+        model,
+        ...rgb,
+      };
+    }
+    default: {
+      const unhandledModel = model;
+      throw new Error(`Unhandled wheel color model: ${unhandledModel}`);
+    }
+  }
 }
 
 /** @typedef {"fail" | "aa" | "aaa" | "max"} WcagContrastLevel */

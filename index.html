@@ -206,8 +206,26 @@
       }
 
       input[type="color"],
-      input[type="range"] {
+      input[type="range"],
+      .control select {
         grid-column: 1 / -1;
+      }
+
+      .control select {
+        width: 100%;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #3a4150;
+        border-radius: 8px;
+        background: #1a1d24;
+        color: #e8eaed;
+        font-size: 0.85rem;
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      .control select:focus-visible {
+        outline: 2px solid #7aa2ff;
+        outline-offset: 2px;
       }
 
       input[type="color"] {
@@ -361,7 +379,7 @@
           </div>
 
           <div class="control">
-            <label for="wheel-lightness">Wheel lightness</label>
+            <label for="wheel-lightness" id="wheel-level-label">Wheel lightness</label>
             <output id="lightness-value" for="wheel-lightness">50%</output>
             <input
               id="wheel-lightness"
@@ -370,6 +388,20 @@
               max="100"
               value="50"
             />
+          </div>
+
+          <div class="control">
+            <label for="wheel-model">Color wheel</label>
+            <select id="wheel-model">
+              <option value="hsl" selected>HSL</option>
+              <option value="hsv">HSV</option>
+              <option value="rgb">RGB</option>
+            </select>
+          </div>
+
+          <div class="control control-toggle">
+            <label for="show-wireframe">Show surface wireframe</label>
+            <input id="show-wireframe" type="checkbox" checked />
           </div>
 
           <div class="control control-toggle">
@@ -398,6 +430,9 @@
       const lightnessValue = document.getElementById("lightness-value");
       const referenceHex = document.getElementById("reference-hex");
       const showPeaksInput = document.getElementById("show-peaks");
+      const showWireframeInput = document.getElementById("show-wireframe");
+      const wheelModelSelect = document.getElementById("wheel-model");
+      const wheelLevelLabel = document.getElementById("wheel-level-label");
       const controlsPanel = document.getElementById("controls-panel");
       const panelToggle = document.getElementById("panel-toggle");
       const panelContent = document.getElementById("panel-content");
@@ -428,6 +463,9 @@
         lightnessValue,
         referenceHex,
         showPeaksInput,
+        showWireframeInput,
+        wheelModelSelect,
+        wheelLevelLabel,
       });
     </script>
   </body>
